@@ -11,51 +11,56 @@
 
 import java.io.*;
 import java.net.*;
+import java.util.*;
 
 public class ProxyServer {
     public static void main(String args[]) throws IOException {
 
-        //primero el proxy debe recibir la pagina solicitada
-        String input;
+        //variables
+        String inputLine;
         URL webURL = null;
-
-        //variables de conexion tipo servidor
-        ServerSocket connectionSocket = null;
+        ServerSocket proxySocket = null;
         Socket communicationSocket = null;
 
-        //crear conexion
+        //crear conexion para proxy
         try {
-            connectionSocket = new ServerSocket(5000);
+            proxySocket = new ServerSocket(5000);
         }
         catch (IOException e) {
             System.out.println(e);
             System.exit(1);
         }  
-        //iniciar conexion
-        try { 
-           communicationSocket = connectionSocket.accept(); 
-        } 
-        catch (IOException e) { 
-            System.err.println("Accept failed."); 
-            System.exit(1); 
-        }
 
-        //lectura de datos
-        BufferedReader in = new BufferedReader( new InputStreamReader( communicationSocket.getInputStream()));
-
-        while ((input = in.readLine()) != null) {
+        while (true) {
             try {
-                String webLine;
-                //String input2 = URLEncoder.encode(input, "UTF-8");
-                webURL = new URL(input);
-                URLConnection webConection = webURL.openConnection(); 
-                webConection.connect();
-                
-                BufferedReader inputHTML = new BufferedReader(new InputStreamReader(webConection.getInputStream()));
-                
-                while ((webLine = inputHTML.readLine()) != null) { 
-                    System.out.println(webLine);
-                }
+            	//primero el proxy debe de recibir la pagina solicitada
+            	communicationSocket = proxySocket.accept(); 
+        		BufferedReader in = new BufferedReader( new InputStreamReader( communicationSocket.getInputStream()));
+
+        		//leer informacion del navegador
+        		String urlLine = in.readLine();
+
+        		//eliminar datos inecesarios y dejar solo URL
+        		String[] words = urlLine.split(" ");
+        		urlLine = words[1];
+
+	            //crear URL y conexion con URL
+	            webURL = new URL(urlLine);
+	            URLConnection webConection = webURL.openConnection();
+	            webConection.setRequestProperty("User-Agent","");
+				webConection.connect();
+
+	            //leer datos de URL y regresar a navegador datos
+	            BufferedReader inURL = new BufferedReader(new InputStreamReader(webConection.getInputStream()));
+	            PrintStream out = new PrintStream(communicationSocket.getOutputStream());
+	           	
+	            while ((inputLine = inURL.readLine()) != null) { 
+	            	out.println(inputLine);
+				} 
+
+				in.close();
+				inURL.close();
+				out.close();
             }
             catch (UnsupportedEncodingException e) { 
                 System.err.println(e);
