@@ -21,9 +21,11 @@ public class ProxyServer {
         boolean read = true;
 
         try{
+        	//crear socket
 		    proxySocket = new ServerSocket(5000);
 
             while(read){
+            	//aceptar conexion y crear thread
 	         	communicationSocket = proxySocket.accept();
 	         	new Threads(communicationSocket).start();
             }
@@ -39,53 +41,128 @@ public class ProxyServer {
 
 class Threads extends Thread{
 	//variables
-    private String inputLine;
     private URL webURL = null;
+    private String line;
     private String urlLine;
+    private String requestMethod;
     private String[] words;
-	private BufferedReader inURL;
     private BufferedReader in;
-    private PrintStream out;
+    private InputStream inHTTP = null;
+    private BufferedReader inURL;
+    private DataOutputStream out;
     private Socket communicationSocket = null;
     private URLConnection webConection;
+    private HttpURLConnection webHttpConnection;
+    private byte b[];
+    private int index;
 
     public Threads(Socket communicationSocket){
         this.communicationSocket = communicationSocket;
     }
+
 	public void run(){
 	    try{
+	    	//crear accesos de lectura y escritura
             in = new BufferedReader(new InputStreamReader(communicationSocket.getInputStream()));
-            out = new PrintStream(communicationSocket.getOutputStream());
+            out = new DataOutputStream(communicationSocket.getOutputStream());
 
-            urlLine = in.readLine();
-
-            words = urlLine.split(" ");
+            //leer linea de navegador
+            line = in.readLine();
+            
+            //obtener SOLO el URL y grabarlo en URLline
+            words = line.split(" ");
+            requestMethod = words[0];
         	urlLine = words[1];
 
-        	webURL = new URL(urlLine);
-	        webConection = webURL.openConnection();
-	        webConection.connect();
+        	//revisar que el request method es GET, es el unico permitido
+        	if (requestMethod.equals("GET")) {
+        		//crear URL
+	        	webURL = new URL(urlLine);
+	        	checkError400(webURL.toString());
+	        	//conectarse con el URL
+		        webConection = webURL.openConnection();
 
-            inURL = new BufferedReader(new InputStreamReader(webConection.getInputStream()));
+		        //crear URL HTTP
+                HttpURLConnection webHttpConnection = (HttpURLConnection)webConection;
+                //crear acceso de lectura con el URL HTTP
+                //webHttpConnection.setRequestProperty("User-Agent","");
+                //webHttpConnection.setRequestMethod("GET");
+		        webHttpConnection.connect();
+            	inHTTP = webHttpConnection.getInputStream();
+            	inURL = new BufferedReader(new InputStreamReader(inHTTP));
 
-            while ((inputLine = inURL.readLine()) != null) { 
-            	//System.out.println(inputLine);
-            	out.println(inputLine);
-			} 
 
-            in.close();
-			inURL.close();
-			out.close();
-			communicationSocket.close();
+	            //interpretar los datos del URL y mandarlos al navegador
+	            b = new byte[1024];
+                index = inHTTP.read(b, 0, 1024);
+
+                while (index != -1) {
+                  out.write(b, 0, index);
+                  index = inHTTP.read(b, 0, 1024);
+                }
+                out.flush();
+			}
+
+			else {
+				error501(line);
+			}
+
+			//cerrar conexiones
+			if (inHTTP != null) {
+				inHTTP.close();
+			}
+			if (inURL != null) {
+				inURL.close();
+			}
+			if (in != null) {
+          	  in.close();
+			}
+			if (out != null) {
+				out.close();
+
+			}
+			if (communicationSocket != null) {
+				communicationSocket.close();
+			}
+			
         }
         catch (UnsupportedEncodingException e) { 
-            System.err.println(e);
+            System.out.println(e);
         }
         catch (MalformedURLException e) {
-            System.err.println(e); 
+            System.out.println(e);
         }
         catch (IOException e) { 
-            System.err.println(e);
+            System.out.println(e);
         }
+	}
+
+	/*public static void checkError400(String urlString) throws MalformedURLException, IOException {
+    	URL u = new URL(urlString); 
+    	HttpURLConnection huc =  (HttpURLConnection)  u.openConnection(); 
+    	huc.setRequestMethod("GET"); 
+    	huc.connect(); 
+    	System.out.println(huc.getResponseCode());
+	}*/
+
+
+	public static void error501(String line) {
+		System.out.println();
+		System.out.println("------------------------------------------");
+		System.out.println(line);
+		System.out.println("NOT IMPLEMENTED");
+		System.out.println("ERROR 501");
+		System.out.println("------------------------------------------");
+		System.out.println();
+	}
+
+	public static void error400(String line) {
+		System.out.println();
+		System.out.println("------------------------------------------");
+		System.out.println(line);
+		System.out.println("BAD REQUEST");
+		System.out.println("ERROR 400");
+		System.out.println("------------------------------------------");
+		System.out.println();
 	}
 }
